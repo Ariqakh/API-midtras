@@ -1,0 +1,12 @@
+{
+  "name": "api-midtrans",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "midtrans-client": "^1.3.1"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}
