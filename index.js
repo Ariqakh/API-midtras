@@ -9,7 +9,7 @@ app.use(express.json());
 // process.env.SERVER_KEY mengambil data dari Environment Variables di Render
 let snap = new midtransClient.Snap({
     isProduction: false, // Gunakan false untuk Sandbox, true untuk live
-    serverKey: process.env.SERVER_KEY 
+    serverKey: process.env.MIDTRANS_SERVER_KEY 
 });
 
 // Endpoint untuk membuat transaksi (dipanggil oleh Flutter)
