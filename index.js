@@ -8,7 +8,6 @@ app.use(express.json());
 // Konfigurasi Midtrans
 // process.env.SERVER_KEY mengambil data dari Environment Variables di Render
 let snap = new midtransClient.Snap({
-    serverKey: 'Mid-server-p9YmQmv1aPGTlj5YlOWeaJ2Z' // Ganti dengan Key Anda
     isProduction: false, // Gunakan false untuk Sandbox, true untuk live
     serverKey: process.env.SERVER_KEY 
 });
