@@ -7,7 +7,7 @@ app.use(express.json());
 
 // Menggunakan CoreApi agar bisa mendapatkan data mentah (Nomor VA / QRIS URL)
 let coreApi = new midtransClient.CoreApi({
-    isProduction: true, // Ubah ke false jika masih dalam tahap testing Sandbox
+    isProduction: false, // Ubah ke false jika masih dalam tahap testing Sandbox
     serverKey: process.env.MIDTRANS_SERVER_KEY 
 });
 
