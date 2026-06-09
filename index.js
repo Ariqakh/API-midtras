@@ -1,76 +1,86 @@
 const express = require('express');
+
 const midtransClient = require('midtrans-client');
+
 const app = express();
 
+
+
 // Middleware untuk membaca data JSON dari aplikasi Flutter
+
 app.use(express.json());
 
-// Menggunakan CoreApi agar bisa mendapatkan data mentah (Nomor VA / QRIS URL)
-let coreApi = new midtransClient.CoreApi({
-    isProduction: false, // Ubah ke false jika masih dalam tahap testing Sandbox
+
+
+// Konfigurasi Midtrans
+
+// process.env.SERVER_KEY mengambil data dari Environment Variables di Render
+
+let snap = new midtransClient.Snap({
+
+    isProduction: false, // Gunakan false untuk Sandbox, true untuk live
+
     serverKey: process.env.MIDTRANS_SERVER_KEY 
+
 });
 
-// Endpoint untuk membuat transaksi (dipanggil secara otomatis oleh Flutter)
-app.post('/create-transaction', async (req, res) => {
-    try {
-        const { orderId, amount, firstName, email, bank } = req.body;
 
-        // Menyusun parameter dasar transaksi
+
+// Endpoint untuk membuat transaksi (dipanggil oleh Flutter)
+
+app.post('/create-transaction', async (req, res) => {
+
+    try {
+
         let parameter = {
+
             "transaction_details": {
-                "order_id": orderId,
-                "gross_amount": amount
+
+                "order_id": req.body.orderId, // ID Order dari Flutter
+
+                "gross_amount": req.body.amount // Total bayar dari Flutter
+
             },
+
             "customer_details": {
-                "first_name": firstName,
-                "email": email
+
+                "first_name": req.body.firstName,
+
+                "email": req.body.email
+
             }
+
         };
 
-        // =========================================================================
-        // 🛠️ KONDISIONAL PEMBAGIAN METODE PEMBAYARAN BERDASARKAN PARAMETER BANK
-        // =========================================================================
-        if (bank === 'qris') {
-            // Jika admin / pengguna memilih QRIS
-            parameter.payment_type = "gopay"; // Midtrans menyatukan QRIS di bawah ekosistem gopay/qris terpadu
-        } 
-        else if (bank === 'mandiri') {
-            // Khusus Mandiri menggunakan tipe echannel (Mandiri Bill Payment)
-            parameter.payment_type = "echannel";
-            parameter.echannel = {
-                "bill_info1": "Pembayaran Toko",
-                "bill_info2": "Online Store"
-            };
-        } 
-        else if (bank === 'permata') {
-            // Khusus Permata Bank transfer
-            parameter.payment_type = "bank_transfer";
-            parameter.bank_transfer = {
-                "bank": "permata"
-            };
-        } 
-        else {
-            // Untuk Virtual Account Bank Umum: bca, bni, atau bri
-            parameter.payment_type = "bank_transfer";
-            parameter.bank_transfer = {
-                "bank": bank 
-            };
-        }
 
-        // Mengirimkan permintaan transaksi ke Core API Midtrans
-        let chargeResponse = await coreApi.charge(parameter);
+
+        // Meminta token ke Midtrans
+
+        let transaction = await snap.createTransaction(parameter);
+
         
-        // Mengirimkan balik seluruh objek respon (termasuk nomor VA atau URL QRIS) ke Flutter
-        res.json(chargeResponse);
+
+        // Mengirim balik token ke aplikasi Flutter
+
+        res.json({ token: transaction.token });
+
     } catch (error) {
-        // Menangani error jika terjadi kendala pada API Midtrans atau server
+
         res.status(500).json({ error: error.message });
+
     }
+
 });
 
-// Port server (di Railway otomatis menggunakan port dari environment variable)
+
+
+// Port server (di Render otomatis menggunakan port 3000 atau sesuai sistem)
+
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log(`Server Core API terintegrasi berjalan di port ${PORT}`);
-});
+
+    console.log(`Server berjalan di port ${PORT}`);
+
+}); 
+
