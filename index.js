@@ -2,42 +2,45 @@ const express = require('express');
 const midtransClient = require('midtrans-client');
 const app = express();
 
-// Middleware untuk membaca data JSON dari aplikasi Flutter
 app.use(express.json());
 
-// Konfigurasi Midtrans
-// process.env.SERVER_KEY mengambil data dari Environment Variables di Render
-let snap = new midtransClient.Snap({
-    isProduction: false, // Gunakan false untuk Sandbox, true untuk live
+// Menggunakan CoreApi agar bisa mendapatkan nomor Virtual Account secara mentah
+let coreApi = new midtransClient.CoreApi({
+    isProduction: true, // Ubah ke false jika masih testing Sandbox
     serverKey: process.env.MIDTRANS_SERVER_KEY 
 });
 
-// Endpoint untuk membuat transaksi (dipanggil oleh Flutter)
 app.post('/create-transaction', async (req, res) => {
     try {
+        const { orderId, amount, firstName, email, bank } = req.body;
+
+        // Menyusun payload transaksi sesuai standar Core API Midtrans
         let parameter = {
+            "payment_type": "bank_transfer",
             "transaction_details": {
-                "order_id": req.body.orderId, // ID Order dari Flutter
-                "gross_amount": req.body.amount // Total bayar dari Flutter
+                "order_id": orderId,
+                "gross_amount": amount
             },
             "customer_details": {
-                "first_name": req.body.firstName,
-                "email": req.body.email
+                "first_name": firstName,
+                "email": email
+            },
+            "bank_transfer": {
+                "bank": bank // otomatis menerima 'bca', 'bni', atau 'bri' dari Flutter
             }
         };
 
-        // Meminta token ke Midtrans
-        let transaction = await snap.createTransaction(parameter);
+        // Mengirim permintaan ke Core API Midtrans
+        let chargeResponse = await coreApi.charge(parameter);
         
-        // Mengirim balik token ke aplikasi Flutter
-        res.json({ token: transaction.token });
+        // Mengirimkan seluruh data respons (termasuk nomor VA) ke Flutter
+        res.json(chargeResponse);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Port server (di Render otomatis menggunakan port 3000 atau sesuai sistem)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server berjalan di port ${PORT}`);
+    console.log(`Server Core API berjalan di port ${PORT}`);
 });
