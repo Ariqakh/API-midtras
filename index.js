@@ -1,15 +1,14 @@
 const express = require('express');
 const midtransClient = require('midtrans-client');
-const admin = require('firebase-admin'); // Tambahkan ini
+const admin = require('firebase-admin');
 const app = express();
 
 app.use(express.json());
 
 // 1. Inisialisasi Firebase Admin
-// Pastikan kamu sudah menambahkan SERVICE_ACCOUNT_KEY di Variable Environment Railway
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
 
@@ -32,6 +31,12 @@ app.post('/create-transaction', async (req, res) => {
             "transaction_details": {
                 "order_id": orderId,
                 "gross_amount": parseInt(amount)
+            },
+            // Tambahkan bagian ini untuk mengubah durasi kadaluarsa jadi 1 jam
+            "custom_expiry": {
+                "order_time": new Date().toISOString().split('.')[0] + " +0700",
+                "expiry_duration": 60, // 60 menit = 1 jam
+                "unit": "minute"
             },
             "customer_details": {
                 "first_name": firstName || "Customer",
@@ -71,7 +76,7 @@ app.post('/create-transaction', async (req, res) => {
     }
 });
 
-// 4. API Webhook (Untuk update otomatis ke Firestore)
+// 4. API Webhook
 app.post('/midtrans-webhook', async (req, res) => {
     const notification = req.body;
     
@@ -81,7 +86,6 @@ app.post('/midtrans-webhook', async (req, res) => {
 
         console.log(`Webhook diterima. Order ID: ${orderId}, Status: ${transactionStatus}`);
 
-        // Update status di Firestore
         if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
             await db.collection('orders').doc(orderId).update({ status: 'Berhasil' });
         } else if (transactionStatus === 'expire' || transactionStatus === 'cancel' || transactionStatus === 'deny') {
