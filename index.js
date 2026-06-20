@@ -37,6 +37,7 @@ app.post('/create-transaction', async (req, res) => {
                 "expiry_duration": 1440, // 1440 menit = 24 jam (1 hari)
                 "unit": "minute"
             },
+            
             "customer_details": {
                 "first_name": firstName || "Customer",
                 "email": email || "email@example.com",
@@ -71,6 +72,22 @@ app.post('/create-transaction', async (req, res) => {
         res.status(200).json(chargeResponse);
     } catch (error) {
         console.error("Midtrans Error:", error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Contoh potongan kode di server.js (backend)
+app.post('/cancel-transaction', async (req, res) => {
+    const { orderId } = req.body;
+    try {
+        // Panggil API Midtrans untuk membatalkan
+        const response = await coreApi.transaction.cancel(orderId);
+        
+        // Update Firestore ke 'Gagal' atau 'Dibatalkan' setelah berhasil di Midtrans
+        await db.collection('orders').doc(orderId).update({ status: 'Dibatalkan' });
+        
+        res.status(200).json(response);
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
