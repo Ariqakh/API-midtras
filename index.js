@@ -1,14 +1,13 @@
 const express = require('express');
 const midtransClient = require('midtrans-client');
-require('dotenv').config(); // Pastikan pakai dotenv untuk simpan key
+require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 
-// 1. Konfigurasi menggunakan Sandbox
 let coreApi = new midtransClient.CoreApi({
-    isProduction: false, // WAJIB false untuk Sandbox
-    serverKey: process.env.MIDTRANS_SERVER_KEY, // Ambil dari file .env
+    isProduction: false, 
+    serverKey: process.env.MIDTRANS_SERVER_KEY, 
     clientKey: process.env.MIDTRANS_CLIENT_KEY
 });
 
@@ -28,7 +27,6 @@ app.post('/create-transaction', async (req, res) => {
             }
         };
 
-        // Logika metode pembayaran
         if (bank === 'qris') {
             parameter.payment_type = "gopay";
         } else if (bank === 'mandiri') {
