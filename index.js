@@ -32,10 +32,9 @@ app.post('/create-transaction', async (req, res) => {
                 "order_id": orderId,
                 "gross_amount": parseInt(amount)
             },
-            // Tambahkan bagian ini untuk mengubah durasi kadaluarsa jadi 1 jam
             "custom_expiry": {
                 "order_time": new Date().toISOString().split('.')[0] + " +0700",
-                "expiry_duration": 60, // 60 menit = 1 jam
+                "expiry_duration": 1440, // 1440 menit = 24 jam (1 hari)
                 "unit": "minute"
             },
             "customer_details": {
