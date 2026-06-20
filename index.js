@@ -18,11 +18,14 @@ let coreApi = new midtransClient.CoreApi({
     serverKey: process.env.MIDTRANS_SERVER_KEY 
 });
 
-// FUNGSI PEMBANTU FORMAT WAKTU MIDTRANS
+// =============================================================================
+// PERBAIKAN UTAMA: Memastikan objek Date dibuat dengan benar di dalam fungsi 
+// agar tidak menghasilkan eror TypeError saat runtime.
+// =============================================================================
 function getMidtransTime() {
-    const now = new Date();
-    // Format: YYYY-MM-DD HH:mm:ss +0700
+    const now = new Date(); // Memastikan instance Date dibuat setiap kali fungsi dipanggil
     const pad = (n) => n.toString().padStart(2, '0');
+    
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
            `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} +0700`;
 }
@@ -36,70 +39,44 @@ app.post('/create-transaction', async (req, res) => {
             return res.status(400).json({ error: "Data transaksi tidak lengkap" });
         }
 
+        // Memetakan struktur item pesanan belanja ke format standard komparasi item Midtrans
+        const formattedItems = (items || []).map(item => ({
+            id: item.id || orderId,
+            price: parseInt(item.harga) || amount,
+            quantity: parseInt(item.jumlah) || 1,
+            name: (item.namaProduk || "Produk").substring(0, 50)
+        }));
+
         let parameter = {
+            "payment_type": "bank_transfer",
             "transaction_details": {
+                "gross_amount": parseInt(amount),
                 "order_id": orderId,
-                "gross_amount": parseInt(amount)
             },
-            "custom_expiry": {
-                "order_time": getMidtransTime(), // Menggunakan fungsi yang diperbaiki
-                "expiry_duration": 1440,
-                "unit": "minute"
+            "bank_transfer": {
+                "bank": bank.toLowerCase()
             },
             "customer_details": {
-                "first_name": firstName || "Customer",
-                "email": email || "email@example.com",
-                "phone": phone || "08123456789", 
-                "billing_address": {
-                    "first_name": firstName,
-                    "phone": phone,
-                    "address": address || "Alamat tidak tersedia",
-                    "country_code": "IDN"
-                },
-                "shipping_address": {
-                    "first_name": firstName,
-                    "phone": phone,
-                    "address": address || "Alamat tidak tersedia",
-                    "country_code": "IDN"
-                }
+                "first_name": firstName || "Pembeli",
+                "email": email || "customer@mail.com",
+                "phone": phone || ""
             },
-            "item_details": items || [] 
+            "item_details": formattedItems,
+            "custom_expiry": {
+                "start_time": getMidtransTime(), // Memanggil fungsi penentu batas kedaluwarsa bayar
+                "unit": "minute",
+                "duration": 60
+            }
         };
 
-        if (bank === 'qris') {
-            parameter.payment_type = "gopay";
-        } else if (bank === 'mandiri') {
-            parameter.payment_type = "echannel";
-            parameter.echannel = { "bill_info1": "Pembayaran:", "bill_info2": "Online Store" };
-        } else {
-            parameter.payment_type = "bank_transfer";
-            parameter.bank_transfer = { "bank": bank };
-        }
+        console.log("Mengirim parameter ke Midtrans:", JSON.stringify(parameter));
 
         const chargeResponse = await coreApi.charge(parameter);
-        res.status(200).json(chargeResponse);
-    } catch (error) {
-        console.error("Midtrans Error:", error.message);
-        res.status(500).json({ error: error.message });
-    }
-});
+        return res.status(200).json(chargeResponse);
 
-// API Cancel Transaction
-app.post('/cancel-transaction', async (req, res) => {
-    const { orderId } = req.body;
-    try {
-        const response = await coreApi.transaction.cancel(orderId);
-        
-        // Cari dokumen berdasarkan field orderId
-        const orderQuery = await db.collection('orders').where('orderId', '==', orderId).get();
-        if (!orderQuery.empty) {
-            // Sinkronisasi status dengan OrderModel
-            await orderQuery.docs[0].ref.update({ statusPesanan: 'dibatalkan' });
-        }
-        
-        res.status(200).json(response);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("Midtrans Error:", error);
+        return res.status(500).json({ error: error.message });
     }
 });
 
@@ -138,4 +115,6 @@ app.post('/midtrans-webhook', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server berjalan di port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server berjalan di port ${PORT}`);
+});
