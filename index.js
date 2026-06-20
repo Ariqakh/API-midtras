@@ -18,6 +18,15 @@ let coreApi = new midtransClient.CoreApi({
     serverKey: process.env.MIDTRANS_SERVER_KEY 
 });
 
+// FUNGSI PEMBANTU FORMAT WAKTU MIDTRANS
+function getMidtransTime() {
+    const now = new Date();
+    // Format: YYYY-MM-DD HH:mm:ss +0700
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
+           `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} +0700`;
+}
+
 // 3. API Create Transaction
 app.post('/create-transaction', async (req, res) => {
     try {
@@ -33,7 +42,7 @@ app.post('/create-transaction', async (req, res) => {
                 "gross_amount": parseInt(amount)
             },
             "custom_expiry": {
-                "order_time": new Date().toISOString().split('.')[0] + " +0700",
+                "order_time": getMidtransTime(), // Menggunakan fungsi yang diperbaiki
                 "expiry_duration": 1440,
                 "unit": "minute"
             },
@@ -84,7 +93,8 @@ app.post('/cancel-transaction', async (req, res) => {
         // Cari dokumen berdasarkan field orderId
         const orderQuery = await db.collection('orders').where('orderId', '==', orderId).get();
         if (!orderQuery.empty) {
-            await orderQuery.docs[0].ref.update({ status: 'Dibatalkan' });
+            // Sinkronisasi status dengan OrderModel
+            await orderQuery.docs[0].ref.update({ statusPesanan: 'dibatalkan' });
         }
         
         res.status(200).json(response);
@@ -93,7 +103,7 @@ app.post('/cancel-transaction', async (req, res) => {
     }
 });
 
-// 4. API Webhook yang sudah diperbaiki (Anti-Error)
+// 4. API Webhook (Sinkron dengan OrderModel.dart)
 app.post('/midtrans-webhook', async (req, res) => {
     const notification = req.body;
     
@@ -113,10 +123,11 @@ app.post('/midtrans-webhook', async (req, res) => {
 
         const orderRef = orderQuery.docs[0].ref;
 
+        // Menggunakan 'statusPesanan' agar sesuai dengan Flutter App Anda
         if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
-            await orderRef.update({ status: 'Berhasil' });
+            await orderRef.update({ statusPesanan: 'pembayaran berhasil' });
         } else if (transactionStatus === 'expire' || transactionStatus === 'cancel' || transactionStatus === 'deny') {
-            await orderRef.update({ status: 'Gagal' });
+            await orderRef.update({ statusPesanan: 'Gagal' });
         }
 
         res.status(200).send('OK');
