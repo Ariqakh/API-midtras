@@ -34,10 +34,9 @@ app.post('/create-transaction', async (req, res) => {
             },
             "custom_expiry": {
                 "order_time": new Date().toISOString().split('.')[0] + " +0700",
-                "expiry_duration": 1440, // 1440 menit = 24 jam (1 hari)
+                "expiry_duration": 1440,
                 "unit": "minute"
             },
-            
             "customer_details": {
                 "first_name": firstName || "Customer",
                 "email": email || "email@example.com",
@@ -76,15 +75,17 @@ app.post('/create-transaction', async (req, res) => {
     }
 });
 
-// Contoh potongan kode di server.js (backend)
+// API Cancel Transaction
 app.post('/cancel-transaction', async (req, res) => {
     const { orderId } = req.body;
     try {
-        // Panggil API Midtrans untuk membatalkan
         const response = await coreApi.transaction.cancel(orderId);
         
-        // Update Firestore ke 'Gagal' atau 'Dibatalkan' setelah berhasil di Midtrans
-        await db.collection('orders').doc(orderId).update({ status: 'Dibatalkan' });
+        // Cari dokumen berdasarkan field orderId
+        const orderQuery = await db.collection('orders').where('orderId', '==', orderId).get();
+        if (!orderQuery.empty) {
+            await orderQuery.docs[0].ref.update({ status: 'Dibatalkan' });
+        }
         
         res.status(200).json(response);
     } catch (error) {
@@ -92,7 +93,7 @@ app.post('/cancel-transaction', async (req, res) => {
     }
 });
 
-// 4. API Webhook
+// 4. API Webhook yang sudah diperbaiki (Anti-Error)
 app.post('/midtrans-webhook', async (req, res) => {
     const notification = req.body;
     
@@ -102,10 +103,20 @@ app.post('/midtrans-webhook', async (req, res) => {
 
         console.log(`Webhook diterima. Order ID: ${orderId}, Status: ${transactionStatus}`);
 
+        // Cari dokumen di Firestore berdasarkan field 'orderId'
+        const orderQuery = await db.collection('orders').where('orderId', '==', orderId).get();
+
+        if (orderQuery.empty) {
+            console.log(`Order ID ${orderId} tidak ditemukan di Firestore!`);
+            return res.status(404).send('Order not found');
+        }
+
+        const orderRef = orderQuery.docs[0].ref;
+
         if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
-            await db.collection('orders').doc(orderId).update({ status: 'Berhasil' });
+            await orderRef.update({ status: 'Berhasil' });
         } else if (transactionStatus === 'expire' || transactionStatus === 'cancel' || transactionStatus === 'deny') {
-            await db.collection('orders').doc(orderId).update({ status: 'Gagal' });
+            await orderRef.update({ status: 'Gagal' });
         }
 
         res.status(200).send('OK');
