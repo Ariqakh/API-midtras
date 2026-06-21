@@ -35,7 +35,8 @@ app.post('/create-transaction', async (req, res) => {
             return res.status(400).json({ error: "Data transaksi tidak lengkap" });
         }
 
-        const formattedItems = (items || []).map(item => ({
+        // --- Perbaikan: Pastikan item_details tidak pernah kosong untuk mencegah error 500 ---
+        let formattedItems = (items || []).map(item => ({
             id: item.id || orderId,
             price: Number(item.harga) || 0, 
             quantity: Number(item.jumlah) || 1,
@@ -47,7 +48,16 @@ app.post('/create-transaction', async (req, res) => {
             return res.status(400).json({ error: "Total amount tidak valid" });
         }
 
-        // --- Perbaikan: Logika Pemisahan QRIS vs Bank Transfer ---
+        // Jika item kosong, isi dengan item default agar Midtrans tidak menolak request
+        if (formattedItems.length === 0) {
+            formattedItems.push({
+                id: orderId,
+                price: totalAmount,
+                quantity: 1,
+                name: "Pesanan Pembelian"
+            });
+        }
+
         let parameter = {
             "transaction_details": {
                 "gross_amount": totalAmount,
@@ -66,8 +76,7 @@ app.post('/create-transaction', async (req, res) => {
             }
         };
 
-        // Jika QRIS, gunakan payment_type 'gopay' (Midtrans QRIS)
-        // Jika Bank, gunakan 'bank_transfer'
+        // --- Logika Pemisahan Metode Pembayaran ---
         if (bank.toLowerCase() === 'qris') {
             parameter.payment_type = 'gopay'; 
         } else {
