@@ -35,7 +35,7 @@ app.post('/create-transaction', async (req, res) => {
             return res.status(400).json({ error: "Data transaksi tidak lengkap" });
         }
 
-        // --- Perbaikan: Pastikan item_details tidak pernah kosong untuk mencegah error 500 ---
+        // 1. Format items dari Flutter
         let formattedItems = (items || []).map(item => ({
             id: item.id || orderId,
             price: Number(item.harga) || 0, 
@@ -43,19 +43,20 @@ app.post('/create-transaction', async (req, res) => {
             name: (item.namaProduk || "Produk").substring(0, 50)
         }));
 
-        const totalAmount = Number(amount);
-        if (isNaN(totalAmount) || totalAmount <= 0) {
-            return res.status(400).json({ error: "Total amount tidak valid" });
-        }
-
-        // Jika item kosong, isi dengan item default agar Midtrans tidak menolak request
+        // 2. PROTEKSI: Jika item kosong, isi dengan item default
+        // INI PENYEBAB UTAMA ERROR 500 ANDA
         if (formattedItems.length === 0) {
             formattedItems.push({
                 id: orderId,
-                price: totalAmount,
+                price: Number(amount),
                 quantity: 1,
-                name: "Pesanan Pembelian"
+                name: "Pesanan Produk"
             });
+        }
+
+        const totalAmount = Number(amount);
+        if (isNaN(totalAmount) || totalAmount <= 0) {
+            return res.status(400).json({ error: "Total amount tidak valid" });
         }
 
         let parameter = {
@@ -68,7 +69,7 @@ app.post('/create-transaction', async (req, res) => {
                 "email": email || "customer@mail.com",
                 "phone": phone || ""
             },
-            "item_details": formattedItems,
+            "item_details": formattedItems, // Sekarang dijamin tidak kosong!
             "custom_expiry": {
                 "start_time": getMidtransTime(),
                 "unit": "minute",
@@ -76,7 +77,7 @@ app.post('/create-transaction', async (req, res) => {
             }
         };
 
-        // --- Logika Pemisahan Metode Pembayaran ---
+        // 3. Logika pemisahan metode
         if (bank.toLowerCase() === 'qris') {
             parameter.payment_type = 'gopay'; 
         } else {
