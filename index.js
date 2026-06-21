@@ -35,17 +35,25 @@ app.post('/create-transaction', async (req, res) => {
             return res.status(400).json({ error: "Data transaksi tidak lengkap" });
         }
 
+        // --- Perbaikan: Logika Anti-Crash untuk Format Item ---
         const formattedItems = (items || []).map(item => ({
             id: item.id || orderId,
-            price: parseInt(item.harga) || amount,
-            quantity: parseInt(item.jumlah) || 1,
+            // Gunakan Number() agar lebih aman dari NaN
+            price: Number(item.harga) || 0, 
+            quantity: Number(item.jumlah) || 1,
             name: (item.namaProduk || "Produk").substring(0, 50)
         }));
+
+        // --- Perbaikan: Validasi total amount ---
+        const totalAmount = Number(amount);
+        if (isNaN(totalAmount) || totalAmount <= 0) {
+            return res.status(400).json({ error: "Total amount tidak valid" });
+        }
 
         let parameter = {
             "payment_type": "bank_transfer",
             "transaction_details": {
-                "gross_amount": parseInt(amount),
+                "gross_amount": totalAmount, // Pastikan ini adalah angka murni
                 "order_id": orderId,
             },
             "bank_transfer": {
@@ -60,7 +68,7 @@ app.post('/create-transaction', async (req, res) => {
             "custom_expiry": {
                 "start_time": getMidtransTime(),
                 "unit": "minute",
-                "expiry_duration": 1440 // <--- PERBAIKAN: Ganti 'duration' menjadi 'expiry_duration'
+                "expiry_duration": 1440 
             }
         };
 
