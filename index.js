@@ -35,29 +35,23 @@ app.post('/create-transaction', async (req, res) => {
             return res.status(400).json({ error: "Data transaksi tidak lengkap" });
         }
 
-        // --- Perbaikan: Logika Anti-Crash untuk Format Item ---
         const formattedItems = (items || []).map(item => ({
             id: item.id || orderId,
-            // Gunakan Number() agar lebih aman dari NaN
             price: Number(item.harga) || 0, 
             quantity: Number(item.jumlah) || 1,
             name: (item.namaProduk || "Produk").substring(0, 50)
         }));
 
-        // --- Perbaikan: Validasi total amount ---
         const totalAmount = Number(amount);
         if (isNaN(totalAmount) || totalAmount <= 0) {
             return res.status(400).json({ error: "Total amount tidak valid" });
         }
 
+        // --- Perbaikan: Logika Pemisahan QRIS vs Bank Transfer ---
         let parameter = {
-            "payment_type": "bank_transfer",
             "transaction_details": {
-                "gross_amount": totalAmount, // Pastikan ini adalah angka murni
+                "gross_amount": totalAmount,
                 "order_id": orderId,
-            },
-            "bank_transfer": {
-                "bank": bank.toLowerCase()
             },
             "customer_details": {
                 "first_name": firstName || "Pembeli",
@@ -71,6 +65,17 @@ app.post('/create-transaction', async (req, res) => {
                 "expiry_duration": 1440 
             }
         };
+
+        // Jika QRIS, gunakan payment_type 'gopay' (Midtrans QRIS)
+        // Jika Bank, gunakan 'bank_transfer'
+        if (bank.toLowerCase() === 'qris') {
+            parameter.payment_type = 'gopay'; 
+        } else {
+            parameter.payment_type = 'bank_transfer';
+            parameter.bank_transfer = {
+                "bank": bank.toLowerCase()
+            };
+        }
 
         console.log("Mengirim parameter ke Midtrans:", JSON.stringify(parameter));
 
