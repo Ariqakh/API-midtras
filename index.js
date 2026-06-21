@@ -18,12 +18,8 @@ let coreApi = new midtransClient.CoreApi({
     serverKey: process.env.MIDTRANS_SERVER_KEY 
 });
 
-// =============================================================================
-// PERBAIKAN UTAMA: Memastikan objek Date dibuat dengan benar di dalam fungsi 
-// agar tidak menghasilkan eror TypeError saat runtime.
-// =============================================================================
 function getMidtransTime() {
-    const now = new Date(); // Memastikan instance Date dibuat setiap kali fungsi dipanggil
+    const now = new Date(); 
     const pad = (n) => n.toString().padStart(2, '0');
     
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
@@ -33,13 +29,12 @@ function getMidtransTime() {
 // 3. API Create Transaction
 app.post('/create-transaction', async (req, res) => {
     try {
-        const { orderId, amount, firstName, email, bank, phone, address, items } = req.body;
+        const { orderId, amount, firstName, email, bank, phone, items } = req.body;
 
         if (!orderId || !amount || !bank) {
             return res.status(400).json({ error: "Data transaksi tidak lengkap" });
         }
 
-        // Memetakan struktur item pesanan belanja ke format standard komparasi item Midtrans
         const formattedItems = (items || []).map(item => ({
             id: item.id || orderId,
             price: parseInt(item.harga) || amount,
@@ -63,9 +58,9 @@ app.post('/create-transaction', async (req, res) => {
             },
             "item_details": formattedItems,
             "custom_expiry": {
-                "start_time": getMidtransTime(), // Memanggil fungsi penentu batas kedaluwarsa bayar
+                "start_time": getMidtransTime(),
                 "unit": "minute",
-                "duration": 60
+                "expiry_duration": 1440 // <--- PERBAIKAN: Ganti 'duration' menjadi 'expiry_duration'
             }
         };
 
@@ -80,7 +75,7 @@ app.post('/create-transaction', async (req, res) => {
     }
 });
 
-// 4. API Webhook (Sinkron dengan OrderModel.dart)
+// 4. API Webhook
 app.post('/midtrans-webhook', async (req, res) => {
     const notification = req.body;
     
@@ -90,7 +85,6 @@ app.post('/midtrans-webhook', async (req, res) => {
 
         console.log(`Webhook diterima. Order ID: ${orderId}, Status: ${transactionStatus}`);
 
-        // Cari dokumen di Firestore berdasarkan field 'orderId'
         const orderQuery = await db.collection('orders').where('orderId', '==', orderId).get();
 
         if (orderQuery.empty) {
@@ -100,7 +94,6 @@ app.post('/midtrans-webhook', async (req, res) => {
 
         const orderRef = orderQuery.docs[0].ref;
 
-        // Menggunakan 'statusPesanan' agar sesuai dengan Flutter App Anda
         if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
             await orderRef.update({ statusPesanan: 'pembayaran berhasil' });
         } else if (transactionStatus === 'expire' || transactionStatus === 'cancel' || transactionStatus === 'deny') {
